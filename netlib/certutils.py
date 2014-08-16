@@ -1,5 +1,5 @@
 from __future__ import (absolute_import, print_function, division)
-import os, ssl, time, datetime
+import os, ssl, time, datetime, sys
 import itertools
 from pyasn1.type import univ, constraint, char, namedtype, tag
 from pyasn1.codec.der.decoder import decode
@@ -8,7 +8,7 @@ import OpenSSL
 
 DEFAULT_EXP = 62208000 # =24 * 60 * 60 * 720
 # Generated with "openssl dhparam". It's too slow to generate this on startup.
-DEFAULT_DHPARAM = """-----BEGIN DH PARAMETERS-----
+DEFAULT_DHPARAM = b"""-----BEGIN DH PARAMETERS-----
 MIGHAoGBAOdPzMbYgoYfO3YBYauCLRlE8X1XypTiAjoeCFD0qWRx8YUsZ6Sj20W5
 zsfQxlZfKovo3f2MftjkDkbI/C/tDgxoe0ZPbjy5CjdOhkzxn0oTbKTs16Rw8DyK
 1LjTR65sQJkJEdgsX8TSi/cicCftJZl9CaZEaObF2bdgSgGK+PezAgEC
@@ -27,16 +27,16 @@ def create_ca(o, cn, exp):
     cert.set_issuer(cert.get_subject())
     cert.set_pubkey(key)
     cert.add_extensions([
-      OpenSSL.crypto.X509Extension("basicConstraints", True,
-                                   "CA:TRUE"),
-      OpenSSL.crypto.X509Extension("nsCertType", False,
-                                   "sslCA"),
-      OpenSSL.crypto.X509Extension("extendedKeyUsage", True,
-                                    "serverAuth,clientAuth,emailProtection,timeStamping,msCodeInd,msCodeCom,msCTLSign,msSGC,msEFS,nsSGC"
-                                    ),
-      OpenSSL.crypto.X509Extension("keyUsage", False,
-                                   "keyCertSign, cRLSign"),
-      OpenSSL.crypto.X509Extension("subjectKeyIdentifier", False, "hash",
+      OpenSSL.crypto.X509Extension(b"basicConstraints", True,
+                                   b"CA:TRUE"),
+      OpenSSL.crypto.X509Extension(b"nsCertType", False,
+                                   b"sslCA"),
+      OpenSSL.crypto.X509Extension(b"extendedKeyUsage", True,
+                                    b"serverAuth,clientAuth,emailProtection,timeStamping,msCodeInd,msCodeCom,msCTLSign,msSGC,msEFS,nsSGC"
+                                   ),
+      OpenSSL.crypto.X509Extension(b"keyUsage", False,
+                                   b"keyCertSign, cRLSign"),
+      OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash",
                                    subject=cert),
       ])
     cert.sign(key, "sha1")
@@ -56,18 +56,18 @@ def dummy_cert(privkey, cacert, commonname, sans):
     """
     ss = []
     for i in sans:
-        ss.append("DNS: %s"%i)
-    ss = ", ".join(ss)
+        ss.append(b"DNS: " + i.encode("idna"))
+    ss = b", ".join(ss)
 
     cert = OpenSSL.crypto.X509()
-    cert.gmtime_adj_notBefore(-3600*48)
+    cert.gmtime_adj_notBefore(-3600 * 48)
     cert.gmtime_adj_notAfter(60 * 60 * 24 * 30)
     cert.set_issuer(cacert.get_subject())
-    cert.get_subject().CN = commonname
-    cert.set_serial_number(int(time.time()*10000))
+    cert.get_subject().CN = commonname.encode("idna")
+    cert.set_serial_number(int(time.time() * 10000))
     if ss:
         cert.set_version(2)
-        cert.add_extensions([OpenSSL.crypto.X509Extension("subjectAltName", True, ss)])
+        cert.add_extensions([OpenSSL.crypto.X509Extension(b"subjectAltName", True, ss)])
     cert.set_pubkey(cacert.get_pubkey())
     cert.sign(privkey, "sha1")
     return SSLCert(cert)
@@ -132,7 +132,7 @@ class CertStore:
             with open(path, "wb") as f:
                 f.write(DEFAULT_DHPARAM)
 
-        bio = OpenSSL.SSL._lib.BIO_new_file(path, b"r")
+        bio = OpenSSL.SSL._lib.BIO_new_file(path.encode(sys.getfilesystemencoding()), b"r")
         if bio != OpenSSL.SSL._ffi.NULL:
             bio = OpenSSL.SSL._ffi.gc(bio, OpenSSL.SSL._lib.BIO_free)
             dh = OpenSSL.SSL._lib.PEM_read_bio_DHparams(
@@ -148,7 +148,8 @@ class CertStore:
             key, ca = klass.create_store(path, basename)
         else:
             p = os.path.join(path, basename + "-ca.pem")
-            raw = file(p, "rb").read()
+            with open(p, "rb") as f:
+                raw = f.read()
             ca = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, raw)
             key = OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, raw)
         dhp = os.path.join(path, basename + "-dhparam.pem")
@@ -194,7 +195,8 @@ class CertStore:
         return key, ca
 
     def add_cert_file(self, spec, path):
-        raw = file(path, "rb").read()
+        with open(path, "rb") as f:
+            raw = f.read()
         cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, raw)
         try:
             privkey = OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, raw)
@@ -308,12 +310,12 @@ class SSLCert:
     @property
     def notbefore(self):
         t = self.x509.get_notBefore()
-        return datetime.datetime.strptime(t, "%Y%m%d%H%M%SZ")
+        return datetime.datetime.strptime(t.decode(), "%Y%m%d%H%M%SZ")
 
     @property
     def notafter(self):
         t = self.x509.get_notAfter()
-        return datetime.datetime.strptime(t, "%Y%m%d%H%M%SZ")
+        return datetime.datetime.strptime(t.decode(), "%Y%m%d%H%M%SZ")
 
     @property
     def has_expired(self):
@@ -343,8 +345,8 @@ class SSLCert:
     def cn(self):
         c = None
         for i in self.subject:
-            if i[0] == "CN":
-                c = i[1]
+            if i[0] == b"CN":
+                c = i[1].decode("idna")
         return c
 
     @property
@@ -352,11 +354,11 @@ class SSLCert:
         altnames = []
         for i in range(self.x509.get_extension_count()):
             ext = self.x509.get_extension(i)
-            if ext.get_short_name() == "subjectAltName":
+            if ext.get_short_name() == b"subjectAltName":
                 try:
                     dec = decode(ext.get_data(), asn1Spec=_GeneralNames())
                 except PyAsn1Error:
                     continue
                 for i in dec[0]:
-                    altnames.append(i[0].asOctets())
+                    altnames.append(i[0].asOctets().decode("idna"))
         return altnames

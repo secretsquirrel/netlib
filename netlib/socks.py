@@ -1,13 +1,11 @@
 from __future__ import (absolute_import, print_function, division)
-import socket
-import struct
-import array
+import ipaddress
 from . import tcp
 
 
 class SocksError(Exception):
     def __init__(self, code, message):
-        super(SocksError, self).__init__(message)
+        super().__init__(message)
         self.code = code
 
 
@@ -56,14 +54,15 @@ class ClientGreeting(object):
 
     @classmethod
     def from_file(cls, f):
-        ver, nmethods = struct.unpack("!BB", f.read(2))
-        methods = array.array("B")
-        methods.fromstring(f.read(nmethods))
+        ver, nmethods = f.read(2)
+        methods = f.read(nmethods)
         return cls(ver, methods)
 
     def to_file(self, f):
-        f.write(struct.pack("!BB", self.ver, len(self.methods)))
-        f.write(self.methods.tostring())
+        head = bytes((self.ver, len(self.methods)))
+        f.write(head)
+        f.write(self.methods)
+
 
 class ServerGreeting(object):
     __slots__ = ("ver", "method")
@@ -74,11 +73,12 @@ class ServerGreeting(object):
 
     @classmethod
     def from_file(cls, f):
-        ver, method = struct.unpack("!BB", f.read(2))
+        ver, method = f.read(2)
         return cls(ver, method)
 
     def to_file(self, f):
-        f.write(struct.pack("!BB", self.ver, self.method))
+        f.write(bytes((self.ver, self.method)))
+
 
 class Message(object):
     __slots__ = ("ver", "msg", "atyp", "addr")
@@ -91,38 +91,40 @@ class Message(object):
 
     @classmethod
     def from_file(cls, f):
-        ver, msg, rsv, atyp = struct.unpack("!BBBB", f.read(4))
+        ver, msg, rsv, atyp = f.read(4)
         if rsv != 0x00:
             raise SocksError(REP.GENERAL_SOCKS_SERVER_FAILURE,
                              "Socks Request: Invalid reserved byte: %s" % rsv)
 
         if atyp == ATYP.IPV4_ADDRESS:
-            host = socket.inet_ntoa(f.read(4))  # We use tnoa here as ntop is not commonly available on Windows.
+            host = ipaddress.IPv4Address(f.read(4)).compressed
             use_ipv6 = False
         elif atyp == ATYP.IPV6_ADDRESS:
-            host = socket.inet_ntop(socket.AF_INET6, f.read(16))
+            host = ipaddress.IPv6Address(f.read(16)).compressed
             use_ipv6 = True
         elif atyp == ATYP.DOMAINNAME:
-            length, = struct.unpack("!B", f.read(1))
-            host = f.read(length)
+            length = f.read(1)[0]
+            host = f.read(length).decode("idna")
             use_ipv6 = False
         else:
             raise SocksError(REP.ADDRESS_TYPE_NOT_SUPPORTED,
                              "Socks Request: Unknown ATYP: %s" % atyp)
 
-        port, = struct.unpack("!H", f.read(2))
+        port = int.from_bytes(f.read(2), byteorder="big")
         addr = tcp.Address((host, port), use_ipv6=use_ipv6)
         return cls(ver, msg, atyp, addr)
 
     def to_file(self, f):
-        f.write(struct.pack("!BBBB", self.ver, self.msg, 0x00, self.atyp))
+        head = bytes((self.ver, self.msg, 0x00, self.atyp))
+        f.write(head)
         if self.atyp == ATYP.IPV4_ADDRESS:
-            f.write(socket.inet_aton(self.addr.host))
+            f.write(ipaddress.IPv4Address(self.addr.host).packed)
         elif self.atyp == ATYP.IPV6_ADDRESS:
-            f.write(socket.inet_pton(socket.AF_INET6, self.addr.host))
+            f.write(ipaddress.IPv6Address(self.addr.host).packed)
         elif self.atyp == ATYP.DOMAINNAME:
-            f.write(struct.pack("!B", len(self.addr.host)))
-            f.write(self.addr.host)
+            host = self.addr.host.encode("idna")
+            f.write(bytes((len(host), )))
+            f.write(host)
         else:
             raise SocksError(REP.ADDRESS_TYPE_NOT_SUPPORTED, "Unknown ATYP: %s" % self.atyp)
-        f.write(struct.pack("!H", self.addr.port))
+        f.write(self.addr.port.to_bytes(2, "big"))

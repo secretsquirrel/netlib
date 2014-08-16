@@ -1,5 +1,5 @@
 from __future__ import (absolute_import, print_function, division)
-import string, urlparse, binascii
+import string, urllib.parse, binascii
 import sys
 from . import odict, utils
 
@@ -40,7 +40,7 @@ def parse_url(url):
             path is valid ASCII
     """
     try:
-        scheme, netloc, path, params, query, fragment = urlparse.urlparse(url)
+        scheme, netloc, path, params, query, fragment = urllib.parse.urlparse(url)
     except ValueError:
         return None
     if not scheme:
@@ -57,7 +57,7 @@ def parse_url(url):
             port = 443
         else:
             port = 80
-    path = urlparse.urlunparse(('', '', path, params, query, fragment))
+    path = urllib.parse.urlunparse(('', '', path, params, query, fragment))
     if not path.startswith("/"):
         path = "/" + path
     if not _is_valid_host(host):
@@ -76,7 +76,7 @@ def read_headers(fp):
     """
     ret = []
     name = ''
-    while 1:
+    while True:
         line = fp.readline()
         if not line or line == '\r\n' or line == '\n':
             break
@@ -332,7 +332,7 @@ def read_http_body_chunked(rfile, headers, limit, request_method, response_code,
             is_request: True if the body to read belongs to a request, False otherwise
     """
     if max_chunk_size is None:
-        max_chunk_size = limit or sys.maxint
+        max_chunk_size = limit or sys.maxsize
 
     expected_size = expected_http_body_size(headers, is_request, request_method, response_code)
 

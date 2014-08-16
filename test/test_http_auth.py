@@ -1,4 +1,4 @@
-import binascii, cStringIO
+import binascii, io
 from netlib import odict, http_auth, http
 import mock
 import tutils

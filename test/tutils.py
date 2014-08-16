@@ -31,9 +31,9 @@ def raises(exc, obj, *args, **kwargs):
         :kwargs Arguments to be passed to the callable.
     """
     try:
-        apply(obj, args, kwargs)
-    except Exception, v:
-        if isinstance(exc, basestring):
+        obj(*args, **kwargs)
+    except Exception as v:
+        if isinstance(exc, str):
             if exc.lower() in str(v).lower():
                 return
             else:

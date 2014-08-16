@@ -1,5 +1,5 @@
 from __future__ import (absolute_import, print_function, division)
-import threading, Queue, cStringIO
+import threading, queue, io
 import OpenSSL
 from . import tcp, certutils
 
@@ -21,7 +21,7 @@ class ServerTestBase:
     addr = ("localhost", 0)
     @classmethod
     def setupAll(cls):
-        cls.q = Queue.Queue()
+        cls.q = queue.Queue()
         s = cls.makeserver()
         cls.port = s.address.port
         cls.server = ServerThread(s)
@@ -81,6 +81,6 @@ class TServer(tcp.TCPServer):
         h.finish()
 
     def handle_error(self, request, client_address):
-        s = cStringIO.StringIO()
+        s = io.StringIO()
         tcp.TCPServer.handle_error(self, request, client_address, s)
         self.q.put(s.getvalue())

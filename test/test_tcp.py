@@ -1,4 +1,4 @@
-import cStringIO, Queue, time, socket, random
+import io, queue, time, socket, random
 from netlib import tcp, certutils, test, certffi
 import mock
 import tutils
@@ -24,7 +24,7 @@ class ClientCipherListHandler(tcp.BaseHandler):
 
 class HangHandler(tcp.BaseHandler):
     def handle(self):
-        while 1:
+        while True:
             time.sleep(1)
 
 
@@ -292,7 +292,7 @@ class TestSSLDisconnect(test.ServerTestBase):
         c.rfile.read(10)
         c.close()
         tutils.raises(tcp.NetLibDisconnect, c.wfile.write, "foo")
-        tutils.raises(Queue.Empty, self.q.get_nowait)
+        tutils.raises(queue.Empty, self.q.get_nowait)
 
 
 class TestSSLHardDisconnect(test.ServerTestBase):
@@ -428,7 +428,7 @@ class TestTCPClient:
 
 class TestFileLike:
     def test_blocksize(self):
-        s = cStringIO.StringIO("1234567890abcdefghijklmnopqrstuvwxyz")
+        s = io.StringIO("1234567890abcdefghijklmnopqrstuvwxyz")
         s = tcp.Reader(s)
         s.BLOCKSIZE = 2
         assert s.read(1) == "1"
@@ -439,7 +439,7 @@ class TestFileLike:
         assert d.startswith("abc") and d.endswith("xyz")
 
     def test_wrap(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s.flush()
         s = tcp.Reader(s)
         assert s.readline() == "foobar\n"
@@ -448,18 +448,18 @@ class TestFileLike:
         assert s.isatty
 
     def test_limit(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = tcp.Reader(s)
         assert s.readline(3) == "foo"
 
     def test_limitless(self):
-        s = cStringIO.StringIO("f"*(50*1024))
+        s = io.StringIO("f"*(50*1024))
         s = tcp.Reader(s)
         ret = s.read(-1)
         assert len(ret) == 50 * 1024
 
     def test_readlog(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = tcp.Reader(s)
         assert not s.is_logging()
         s.start_log()
@@ -476,7 +476,7 @@ class TestFileLike:
         tutils.raises(ValueError, s.get_log)
 
     def test_writelog(self):
-        s = cStringIO.StringIO()
+        s = io.StringIO()
         s = tcp.Writer(s)
         s.start_log()
         assert s.is_logging()
@@ -486,7 +486,7 @@ class TestFileLike:
         assert s.get_log() == "xx"
 
     def test_writer_flush_error(self):
-        s = cStringIO.StringIO()
+        s = io.StringIO()
         s = tcp.Writer(s)
         o = mock.MagicMock()
         o.flush = mock.MagicMock(side_effect=socket.error)
@@ -494,7 +494,7 @@ class TestFileLike:
         tutils.raises(tcp.NetLibDisconnect, s.flush)
 
     def test_reader_read_error(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = tcp.Reader(s)
         o = mock.MagicMock()
         o.read = mock.MagicMock(side_effect=socket.error)
@@ -502,14 +502,14 @@ class TestFileLike:
         tutils.raises(tcp.NetLibDisconnect, s.read, 10)
 
     def test_reset_timestamps(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = tcp.Reader(s)
         s.first_byte_timestamp = 500
         s.reset_timestamps()
         assert not s.first_byte_timestamp
 
     def test_first_byte_timestamp_updated_on_read(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = tcp.Reader(s)
         s.read(1)
         assert s.first_byte_timestamp
@@ -518,7 +518,7 @@ class TestFileLike:
         assert s.first_byte_timestamp == expected
 
     def test_first_byte_timestamp_updated_on_readline(self):
-        s = cStringIO.StringIO("foobar\nfoobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar\nfoobar")
         s = tcp.Reader(s)
         s.readline()
         assert s.first_byte_timestamp
@@ -527,7 +527,7 @@ class TestFileLike:
         assert s.first_byte_timestamp == expected
 
     def test_read_ssl_error(self):
-        s = cStringIO.StringIO("foobar\nfoobar")
+        s = io.StringIO("foobar\nfoobar")
         s = mock.MagicMock()
         s.read = mock.MagicMock(side_effect=SSL.Error())
         s = tcp.Reader(s)

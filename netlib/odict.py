@@ -60,7 +60,7 @@ class ODict:
             Sets the values for key k. If there are existing values for this
             key, they are cleared.
         """
-        if isinstance(valuelist, basestring):
+        if isinstance(valuelist, str):
             raise ValueError("Expected list of values instead of string. Example: odict['Host'] = ['www.example.com']")
 
         new = self._filter_lst(k, self.lst)

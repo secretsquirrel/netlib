@@ -1,4 +1,4 @@
-from cStringIO import StringIO
+from io import StringIO
 import socket
 from nose.plugins.skip import SkipTest
 from netlib import socks, tcp

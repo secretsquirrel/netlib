@@ -12,7 +12,7 @@ def _fnmatch(name, patternList):
 def _splitAll(path):
     parts = []
     h = path
-    while 1:
+    while True:
         if not h:
             break
         h, t = os.path.split(h)

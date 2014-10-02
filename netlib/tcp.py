@@ -135,6 +135,8 @@ class Reader(_FileLike):
                 break
             result += data
             if length != -1:
+                if type(length) != int:
+                        length = int(length)
                 length -= len(data)
         self.add_log(result)
         return result
